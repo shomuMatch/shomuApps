@@ -14,6 +14,12 @@ const useStyles = makeStyles((theme) => ({
     background: "black",
     width: "100%",
     height: "100%"
+  },
+  videoOwn: {
+    transform: "scale(-1,1)"
+  },
+  videoOther: {
+    transform: "scale(1,1)"
   }
 }));
 
@@ -21,6 +27,7 @@ const useStyles = makeStyles((theme) => ({
 export interface FlexibleVideoProps {
   muted: boolean;
   peerId: string;
+  myPeerId: string;
   flexibleVideosMap: Map<string,flexibleVideoType>;
   streamsMap: Map<string,MediaStream>;
   setFlexibleVideosMap: React.Dispatch<React.SetStateAction<Map<string, flexibleVideoType>>>;
@@ -28,7 +35,7 @@ export interface FlexibleVideoProps {
   test: any;
   requestFV: any;
 }
-const FlexibleVideo: React.FC<FlexibleVideoProps> = ({muted, peerId, flexibleVideosMap, requestFV, test, setFlexibleVideosMap, streamsMap, setStreamsMap}) => {
+const FlexibleVideo: React.FC<FlexibleVideoProps> = ({muted, myPeerId, peerId, flexibleVideosMap, requestFV, test, setFlexibleVideosMap, streamsMap, setStreamsMap}) => {
   const classes = useStyles();
 
   const onDrag = (e:any, d:any) => {
@@ -69,6 +76,7 @@ const FlexibleVideo: React.FC<FlexibleVideoProps> = ({muted, peerId, flexibleVid
             bounds="parent"
             position={{x: flexibleVideosMap.get(peerId)?.x!, y: flexibleVideosMap.get(peerId)?.y!}}
             size={{width: flexibleVideosMap.get(peerId)?.width!, height: flexibleVideosMap.get(peerId)?.height!}}
+            
           >
             <div className={classes.parts}>
               <video
@@ -78,6 +86,7 @@ const FlexibleVideo: React.FC<FlexibleVideoProps> = ({muted, peerId, flexibleVid
                 playsInline
                 width="100%"
                 height="100%"
+                className={myPeerId==peerId ? classes.videoOwn : classes.videoOther}
               />
             </div>
               </Rnd>
