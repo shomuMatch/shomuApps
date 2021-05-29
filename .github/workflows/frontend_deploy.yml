@@ -34,7 +34,7 @@ jobs:
           npm ci
           npm run build
           aws s3 cp build s3://$S3_FRONTEND_BUCKET/ --recursive --quiet
-        - name: Archive logs
+      - name: Archive logs
         uses: actions/upload-artifact@v2
         with:
           name: UnitTest report
