@@ -35,4 +35,4 @@ jobs:
           npm run build
           aws s3 cp build s3://$S3_FRONTEND_BUCKET/ --recursive --quiet
       - name: print error
-          run: cat /home/runner/.npm/_logs/*.log
+        run: cat /home/runner/.npm/_logs/*.log
