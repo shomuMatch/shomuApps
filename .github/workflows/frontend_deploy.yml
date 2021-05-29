@@ -28,8 +28,9 @@ jobs:
         env: 
           S3_UPLOAD_BUCKET: ${{ secrets.S3_FRONTEND_BUCKET }}
           REACT_APP_SKYWAY_API_KEY: ${{ secrets.REACT_APP_SKYWAY_API_KEY }}
-        run: cd video-meeting
-        run: echo REACT_APP_SKYWAY_API_KEY="$REACT_APP_SKYWAY_API_KEY" > .env
-        run: npm ci
-        run: npm run build
-        run: aws s3 cp build s3://$S3_FRONTEND_BUCKET/ --recursive --quiet
+        run: |
+          cd video-meeting
+          echo REACT_APP_SKYWAY_API_KEY="$REACT_APP_SKYWAY_API_KEY" > .env
+          npm ci
+          npm run build
+          aws s3 cp build s3://$S3_FRONTEND_BUCKET/ --recursive --quiet
