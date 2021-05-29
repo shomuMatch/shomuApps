@@ -7,7 +7,7 @@ resource "aws_cloudfront_distribution" "frontend_distribution" {
     }
   }
 
-  enabled             = false
+  enabled             = true
   default_root_object = "index.html"
   wait_for_deployment = true
 
