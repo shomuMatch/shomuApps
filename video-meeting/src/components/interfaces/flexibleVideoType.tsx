@@ -4,4 +4,5 @@ export interface flexibleVideoType{
     y: number;
     width: number;
     height: number;
+    zIndex: number;
   }
