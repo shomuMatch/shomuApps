@@ -1,4 +1,4 @@
-import React, {useEffect} from 'react';
+import React, {useCallback, useEffect} from 'react';
 import GeneralTemplate from '../templates/GeneralTemplate';
 import TextField from '@material-ui/core/TextField';
 import Button from '@material-ui/core/Button';
@@ -18,6 +18,8 @@ import ScreenShareIcon from '@material-ui/icons/ScreenShare';
 import StopScreenShareIcon from '@material-ui/icons/StopScreenShare';
 import { useLocation, useHistory } from 'react-router-dom';
 import FlexibleVideo from '../parts/videoPage/FlexibleVideo'
+import FormControlLabel from '@material-ui/core/FormControlLabel';
+import Switch from '@material-ui/core/Switch';
 
 import {flexibleVideoType} from '../interfaces/flexibleVideoType'
 
@@ -26,6 +28,7 @@ import Peer, { MeshRoom} from "skyway-js";
 const queryString = require('query-string');
 const APIKey = process.env.REACT_APP_SKYWAY_API_KEY as string;
 const peer = new Peer({key: APIKey});
+const peerSS = new Peer({key: APIKey});
 
 const useStyles = makeStyles((theme) => ({
   root: {
@@ -71,7 +74,6 @@ const VideoPage: React.FC = () => {
 
   
   const setMapState = <T1,T2>(originalMap:Map<T1,T2>,setter:React.Dispatch<React.SetStateAction<Map<T1, T2>>>,key:T1, value:T2) =>{
-    console.log(originalMap,key,value);
     setter(new Map<T1,T2>(originalMap.set(key, value)));
   }
 
@@ -85,8 +87,8 @@ const VideoPage: React.FC = () => {
   const [audioOutputDevicesMap, setAudioOutputDevicesMap] = React.useState(new Map<number,{deviceId:string, deviceName:string}>());
 
   const [room,setRoom] = React.useState<MeshRoom>();
+  const [roomSS,setRoomSS] = React.useState<MeshRoom>();
   const [sharing, setSharing] = React.useState(false);
-  const [shareStream, setShareStream] = React.useState<MediaStream>();
   const [connected,setConnected] = React.useState(false);
   
   const [flexibleVideosMap, setFlexibleVideosMap] = React.useState(new Map<string,flexibleVideoType>());
@@ -108,49 +110,41 @@ const VideoPage: React.FC = () => {
   const micSetter = (isChecked: boolean) => setMutedState(isChecked);
   const [cameraState, setCameraState] = React.useState(false);
   const cameraSetter = (isChecked: boolean) => setCameraState(isChecked);
+  const [syncPosition, setSyncPosition] = React.useState(false);
 
+  const setDeviceConf = useCallback(
+    () => {
+      streamsMap.get(peer.id)?.getTracks().forEach((t) => {
+        if(t.kind === "video"){
+          t.enabled = !cameraState;
+        }
+        if(t.kind === "audio"){
+          t.enabled = !mutedState;
+        }
+      })
+      return;
+    },
+    [cameraState, mutedState]
+  );
   
 //カメラのon/offボタンの実装
 useEffect(() => {
-  console.log("cameraON/OFF", cameraState);
   setDeviceConf();
-}, [cameraState]);
+}, [cameraState, setDeviceConf]);
 
 //マイクのon/offボタンの実装
 useEffect(() => {
-  console.log("micON/OFF", mutedState);
   setDeviceConf();
-}, [mutedState]);
+}, [mutedState, setDeviceConf]);
 
 
-const setDeviceConf = () => {
-  streamsMap.get(peer.id)?.getTracks().map((t) => {
-    if(t.kind == "video"){
-      t.enabled = !cameraState;
-    }
-    if(t.kind == "audio"){
-      t.enabled = !mutedState;
-    }
-  })
-  // const constraints = {
-  //   audio: mutedState ? false : {deviceId: audioInputDevicesMap.get(audioInputDeviceId)?.deviceId ? {exact: audioInputDevicesMap.get(audioInputDeviceId)?.deviceId} : undefined},
-  //   video: cameraState ? false : {deviceId:  videoDevicesMap.get(videoDeviceId)?.deviceId ? {exact: videoDevicesMap.get(videoDeviceId)?.deviceId} : undefined}
-  // };
-  // console.log(constraints);
-  // navigator.mediaDevices.getUserMedia(constraints).then((stream) => {
-  //   setFlexibleVideos(peer.id,stream);
-  //   room?.send({type:"flexibleVideo", flexibleVideosMap: Array.from(flexibleVideosMap.entries())});
-  // });
-  return;
-}
 
   
 
   const setFlexibleVideos = (peerId: string, stream: MediaStream) => {
-    const fv:flexibleVideoType = {x:0, y:0, width:320, height: 180};
+    const fv:flexibleVideoType = {x:0, y:0, width:320, height: 180, zIndex: 0};
     setMapState<string,flexibleVideoType>(flexibleVideosMap, setFlexibleVideosMap, peerId, fv);
     setMapState<string,MediaStream>(streamsMap, setStreamsMap, peerId, stream);
-    console.log(streamsMap);
   }
   
   useEffect(() => {
@@ -161,7 +155,12 @@ const setDeviceConf = () => {
     navigator.mediaDevices.enumerateDevices().then(gotDevices);
     navigator.mediaDevices.getUserMedia({
       audio: true,
-      video: true
+      video: {
+        aspectRatio: 1.777777,
+        width: {min: 640, max: 1920},
+        height: {min: 360, max: 1080},
+        facingMode: 'environment'
+      }
     }).then((stream) => {
       setFlexibleVideos(peer.id,stream);
       room?.replaceStream(stream);
@@ -171,27 +170,26 @@ const setDeviceConf = () => {
   useEffect(() => {
     if(room){
       room.on('stream', (stream:any) => {
-        console.log(stream.peerId,"stream catched");
         setFlexibleVideos(stream.peerId,stream);
         // setStreamsMap(new Map<string, MediaStream>(streamsMap.set(stream.peerId, stream)));
       });
   
       room.on('peerJoin', (peerId:string) => {
-        console.log(peerId,"JOIN!");
         
         
       });
-  
-      room.on('data', ({ src, data }) => {
+      room.on('data', (arg) => {
+        const src = arg.src;
+        const data = arg.data;
         const targetPeerId = src;
-        console.log(targetPeerId);
         const targetData = data;
         if(targetData.type){
           if(targetData.type == "flexibleVideo"){
-            console.log("data recieved from", targetPeerId, "data= ",targetData);
-            const tmpMap = new Map<string, flexibleVideoType>();
-            targetData.flexibleVideosMap.forEach((e:any) => tmpMap.set(e[0],e[1]));
-            setFlexibleVideosMap(tmpMap);
+            if(syncPosition){
+              const tmpMap = new Map<string, flexibleVideoType>();
+              targetData.flexibleVideosMap.forEach((e:any) => tmpMap.set(e[0],e[1]));
+              setFlexibleVideosMap(tmpMap);
+            }
           } else if(targetData.type == "requestFV"){
             room?.send({type:"flexibleVideo", flexibleVideosMap: Array.from(flexibleVideosMap.entries())});
           }
@@ -209,6 +207,30 @@ const setDeviceConf = () => {
     }
   }, [room]);
   
+  const switchSync = () => {
+    room?.removeAllListeners('data');
+    room?.on('data', (arg) => {
+      const src = arg.src;
+      const data = arg.data;
+      const targetPeerId = src;
+      const targetData = data;
+      if(targetData.type){
+        if(targetData.type == "flexibleVideo"){
+          if(!syncPosition){
+            const tmpMap = new Map<string, flexibleVideoType>();
+            targetData.flexibleVideosMap.forEach((e:any) => tmpMap.set(e[0],e[1]));
+            setFlexibleVideosMap(tmpMap);
+          }
+        } else if(targetData.type == "requestFV"){
+          if(!syncPosition){
+            room?.send({type:"flexibleVideo", flexibleVideosMap: Array.from(flexibleVideosMap.entries())});
+          }
+        }
+      }
+    });
+    setSyncPosition(!syncPosition);
+  }
+
   const startMeeting = () => {
     if(!peer){
       return;
@@ -225,7 +247,9 @@ const setDeviceConf = () => {
 
   
   const test = () => {
-    room?.send({type:"flexibleVideo", flexibleVideosMap: Array.from(flexibleVideosMap.entries())});
+    if(syncPosition){
+      room?.send({type:"flexibleVideo", flexibleVideosMap: Array.from(flexibleVideosMap.entries())});
+    }
   }
 
   const requestFV = () => {
@@ -254,7 +278,6 @@ const setDeviceConf = () => {
         setMapState<number,{deviceId:string, deviceName:string}>(videoDevicesMap, setVideoDevicesMap, videoCount, {deviceId,deviceName});
         videoCount++;
       } else {
-        console.log('Some other kind of source/device: ', deviceInfo);
       }
     }
   }
@@ -264,12 +287,24 @@ const setDeviceConf = () => {
     if(isVideo){
       constraints = {
         audio: {deviceId: audioInputDevicesMap.get(audioInputDeviceId)?.deviceId ? {exact: audioInputDevicesMap.get(audioInputDeviceId)?.deviceId} : undefined},
-        video: {deviceId: videoDevicesMap.get(id)?.deviceId ? {exact: videoDevicesMap.get(id)?.deviceId} : undefined}
+        video: {
+          deviceId: videoDevicesMap.get(id)?.deviceId ? {exact: videoDevicesMap.get(id)?.deviceId} : undefined,
+          aspectRatio: 1.777777,
+          width: {min: 640, max: 1920},
+          height: {min: 360, max: 1080},
+          facingMode: 'environment'
+        }
       };
     }else{
       constraints = {
         audio: {deviceId: audioInputDevicesMap.get(id)?.deviceId ? {exact: audioInputDevicesMap.get(id)?.deviceId} : undefined},
-        video: {deviceId: videoDevicesMap.get(videoDeviceId)?.deviceId ? {exact: videoDevicesMap.get(videoDeviceId)?.deviceId} : undefined}
+        video: {
+          deviceId: videoDevicesMap.get(videoDeviceId)?.deviceId ? {exact: videoDevicesMap.get(videoDeviceId)?.deviceId} : undefined,
+          aspectRatio: 1.777777,
+          width: {min: 640, max: 1280},
+          height: {min: 360, max: 720},
+          facingMode: 'environment'
+        }
       };
     }
     navigator.mediaDevices.getUserMedia(constraints).then((stream) => {
@@ -288,8 +323,17 @@ const setDeviceConf = () => {
   }
 
   const finishMeeting = () => {
-    room?.close()
-    // 既存の奴全部stopしないといけない？
+    if(sharing){
+      roomSS?.close();
+      setSharing(false);
+      streamsMap.get(peerSS.id)?.getTracks().map((t) => {
+        t.stop();
+      });
+    }
+    room?.close();
+    streamsMap.get(peer.id)?.getTracks().map((t) => {
+      t.stop();
+    });
     const tmpFVMap = new Map<string,flexibleVideoType>();
     const tmpStreamMap = new Map<string,MediaStream>();
     setFlexibleVideosMap(tmpFVMap);
@@ -302,16 +346,20 @@ const setDeviceConf = () => {
       return;
     }
     if(sharing){
-      setFlexibleVideos(peer.id,shareStream!);
-      room?.replaceStream(shareStream!);
+      roomSS?.close();
       setSharing(false);
-      setShareStream(undefined);
+      streamsMap.get(peerSS.id)?.getTracks().map((t) => {
+        t.stop();
+      });
     }else {
       const mediaDevices = navigator.mediaDevices as any;
       mediaDevices.getDisplayMedia({ video: true }).then((stream:any) => {
-        setShareStream(streamsMap.get(peer.id));
-        setFlexibleVideos(peer.id,stream);
-        room?.replaceStream(stream);
+        const roomtmp = peerSS.joinRoom<MeshRoom>(roomName, {
+          mode: "mesh",
+          stream: stream,
+        });
+        setFlexibleVideos(peerSS.id,stream);
+        setRoomSS(roomtmp);
       });
       setSharing(true);
     }
@@ -375,10 +423,21 @@ const setDeviceConf = () => {
       <CameraButton muted={cameraState} setter={cameraSetter} />
       <MicButton muted={mutedState} setter={micSetter} />
       <Button onClick={screenShare}>{sharing ? <StopScreenShareIcon />: <ScreenShareIcon />}</Button>
+      <FormControlLabel
+        control={
+          <Switch
+            checked={syncPosition}
+            onChange={switchSync}
+            name="setSyncPos"
+            color="primary"
+          />
+        }
+        label="位置を同期する"
+      />
         </div>
         <div className={classes.videos}>
             {[...Array.from(streamsMap.keys())].map(peerID =>{
-              return <FlexibleVideo key={peerID} muted={peerID==peer.id} peerId={peerID} flexibleVideosMap={flexibleVideosMap} setFlexibleVideosMap={setFlexibleVideosMap} streamsMap={streamsMap} setStreamsMap={setStreamsMap} requestFV={requestFV} test={test} />
+              return <FlexibleVideo key={peerID} muted={peerID==peer.id} peerId={peerID} myPeerId={peer.id} flexibleVideosMap={flexibleVideosMap} setFlexibleVideosMap={setFlexibleVideosMap} streamsMap={streamsMap} setStreamsMap={setStreamsMap} requestFV={requestFV} test={test} />
             })}
         </div>
       </div>
